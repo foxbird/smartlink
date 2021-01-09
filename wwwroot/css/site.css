@@ -1,0 +1,116 @@
+
+html, body {
+    height: 100%;
+    margin: 0;
+    background-color: #f3e600;
+    color: #0a0a00;
+}
+
+.loader {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.loader .icon {
+    font-size: 100px;
+}
+
+.matrix {
+    display: flex;
+    color: #000000;
+    font-family: Consolas, "Courier New", Courier, monospace;
+    text-align: center;
+    font-size: 14pt;
+}
+
+.matrix .code {
+    flex: 50%;
+    padding: 5px;
+    margin: 0 5px 0 0;
+}
+
+.matrix .sequence {
+    flex: 50%;
+    padding: 5px;
+    margin: 0;
+}
+
+.code table, .sequence table {
+    border: none;
+    border-collapse: collapse;
+    margin: 0 auto 0 auto;
+    margin-bottom: 10px;
+}
+
+tbody th {
+    padding-right: 5px;
+}
+
+td.memory-row {
+    width: 10px;
+}
+
+.cell {
+    width: 30px;
+    border: 1px solid #9e9700;
+    background-color: #c9be00;
+    font-family: Consolas, "Courier New", Courier, monospace;
+    text-align: center;
+    font-size: 14pt;
+}
+
+.memory {
+    width: 188px;
+    border: 1px solid #9e9700;
+    background-color: #c9be00;
+    font-family: Consolas, "Courier New", Courier, monospace;
+    text-align: center;
+    font-size: 14pt;
+}
+
+.cell-bad {
+    background-color: #d25050;
+}
+
+input.cell:focus {
+    outline: none;
+    border: 1px solid #0a0a00;
+}
+
+button {
+    font-size: 20px;
+    background-color: #c9be00;
+    border: 1px solid #9e9700;
+    padding: 2px 6px 2px 6px;
+}
+
+button:focus, button:hover {
+    outline: none;
+    background-color: #9e9700;
+    border: 1px solid #0a0a00;
+}
+
+button:active {
+    outline: none;
+    background-color: #f3e600;
+    border: 1px solid #0a0a00;
+}
+
+.solution {
+    background-color: #c9be00;
+    border: 1px solid #9e9700;
+    padding: 2px 6px 2px 6px;
+    font-family: Consolas, "Courier New", Courier, monospace;
+    font-size: 14pt;
+    min-height: 100px;
+    margin: 10px 10px 10px 10px;
+    white-space: pre-wrap;
+    unicode-bidi: embed;
+    box-shadow: 2px 2px 3px black;
+}
+
+footer {
+    min-height: 10px;
+}
