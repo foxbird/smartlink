@@ -17,21 +17,23 @@ namespace SmartLink
 
         private readonly string ALLOWED_CHARACTERS = "abcdefABCDEF1579 \n";
 
-        private readonly static byte MATRIX_THRESHOLD = 100; // 130 calculated
-        private readonly static byte SEQUENCE_THRESHOLD = 180;
+        private readonly static byte MATRIX_THRESHOLD = 200; // 130 calculated
+        private readonly static byte SEQUENCE_THRESHOLD = 215;
 
-        private readonly static Rectangle MATRIX_RECTANGLE = new Rectangle(180, 350, 620, 380);
-        private readonly static Rectangle SEQUENCE_RECTANGLE = new Rectangle(860, 340, 400, 300);
+        private readonly static Rectangle MATRIX_RECTANGLE = new Rectangle(220, 350, 540, 370);
+        private readonly static Rectangle SEQUENCE_RECTANGLE = new Rectangle(825, 340, 400, 300);
 
         private Image Image { get; set; } = null;
         public CaptureResult Result { get; set; } = new CaptureResult();
         private Bitmap Matrix { get; set; } = null;
         private Bitmap Sequences { get; set; } = null;
         private TesseractEngine Tesseract { get; set; } = null;
+        private string Id { get; set; } = Guid.NewGuid().ToString("D");
 
         public Ocr(Stream stream)
         {
             Image = Image.FromStream(stream);
+            Image.Save($"procimages/{Id}_original.png", System.Drawing.Imaging.ImageFormat.Png);
             Tesseract = new TesseractEngine(@"./tessdata", "eng", EngineMode.TesseractAndLstm)
             {
                 DefaultPageSegMode = PageSegMode.SingleBlock
@@ -44,13 +46,11 @@ namespace SmartLink
             if (Image == null)
                 throw new InvalidOperationException("Cannot process a null image");
 
-            string id = Guid.NewGuid().ToString("D");
-
             GetMatrixImage();
             GetSequenceImage();
 
-            Matrix.Save($"procimages/{id}_matrix.png", System.Drawing.Imaging.ImageFormat.Png);
-            Sequences.Save($"procimages/{id}_sequences.png", System.Drawing.Imaging.ImageFormat.Png);
+            Matrix.Save($"procimages/{Id}_matrix.png", System.Drawing.Imaging.ImageFormat.Png);
+            Sequences.Save($"procimages/{Id}_sequences.png", System.Drawing.Imaging.ImageFormat.Png);
 
             OcrMatrix();
             OcrSequences();
