@@ -15,30 +15,43 @@ namespace SmartLink
     {
         private bool disposedValue;
 
-        private readonly string ALLOWED_CHARACTERS = "abcdefABCDEF1579 \n";
+        private static readonly string ALLOWED_CHARACTERS = "abcdefABCDEF1579 \n";
 
-        private readonly static byte MATRIX_THRESHOLD = 200; // 130 calculated
-        private readonly static byte SEQUENCE_THRESHOLD = 215;
+        private static readonly byte MATRIX_THRESHOLD = 210; // 130 calculated
+        private static readonly byte SEQUENCE_THRESHOLD = 215;
 
-        private readonly static Rectangle MATRIX_RECTANGLE = new Rectangle(220, 350, 540, 370);
-        private readonly static Rectangle SEQUENCE_RECTANGLE = new Rectangle(825, 340, 400, 300);
+        private static readonly Rectangle MATRIX_RECTANGLE = new Rectangle(220, 350, 540, 370);
+        private static readonly Rectangle SEQUENCE_RECTANGLE = new Rectangle(825, 340, 400, 300);
 
         private Image Image { get; set; } = null;
         public CaptureResult Result { get; set; } = new CaptureResult();
         private Bitmap Matrix { get; set; } = null;
         private Bitmap Sequences { get; set; } = null;
-        private TesseractEngine Tesseract { get; set; } = null;
+        private static TesseractEngine Tesseract { get; set; } = null;
         private string Id { get; set; } = Guid.NewGuid().ToString("D");
 
-        public Ocr(Stream stream)
+        private static void Initialize()
         {
-            Image = Image.FromStream(stream);
-            Image.Save($"procimages/{Id}_original.png", System.Drawing.Imaging.ImageFormat.Png);
             Tesseract = new TesseractEngine(@"./tessdata", "eng", EngineMode.TesseractAndLstm)
             {
                 DefaultPageSegMode = PageSegMode.SingleBlock
             };
 
+            Tesseract.SetVariable("tessedit_char_whitelist", ALLOWED_CHARACTERS);
+            Tesseract.SetVariable("user_patterns_file", @"./tessdata/cyber_patterns");
+            // \n (char or digit), \c (char), \d (digit), \p (punct), \a (lower), \A (upper), \* any number (\A\d and \d\A)
+            Tesseract.SetVariable("user_words_file", @"./tessdata/cyber_words"); // BD, 1C, E9, 55, 7A, 1F
+            Tesseract.SetVariable("load_system_dawg", false); // Don't load sys dictionary
+            Tesseract.SetVariable("load_freq_dawg", false); // Don't load word freeuence
+        }
+
+        public Ocr(Stream stream)
+        {
+            if (Tesseract == null)
+                Initialize();
+
+            Image = Image.FromStream(stream);
+            Image.Save($"procimages/{Id}_original.png", System.Drawing.Imaging.ImageFormat.Png);
         }
 
         public CaptureResult Process()
@@ -131,6 +144,12 @@ namespace SmartLink
             using Pix pix = BitmapToPix(Matrix);
             using var result = Tesseract.Process(pix);
             var text = result.GetText();
+
+            using (var stream = File.CreateText($"procimages/{Id}_matrix.txt"))
+            {
+                stream.Write(text);
+            }
+
             text = Regex.Replace(text, $"[^{ALLOWED_CHARACTERS}]", "_");
 
             text = text.Replace("\n\n", "\n");
@@ -157,6 +176,12 @@ namespace SmartLink
             using Pix pix = BitmapToPix(Sequences);
             using var result = Tesseract.Process(pix);
             var text = result.GetText();
+
+            using (var stream = File.CreateText($"procimages/{Id}_sequence.txt"))
+            {
+                stream.Write(text);
+            }
+
             text = Regex.Replace(text, $"[^{ALLOWED_CHARACTERS}]", "_");
 
             var seqs = text.Split("\n").ToList();

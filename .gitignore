@@ -362,4 +362,5 @@ MigrationBackup/
 FodyWeavers.xsd
 
 procimages/*.png
+procimages/*.txt
 procimages/Thumbs.db

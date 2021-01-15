@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
+
 namespace SmartLink.Controllers
 {
     [Route("api/[controller]")]
@@ -22,8 +23,9 @@ namespace SmartLink.Controllers
                 MemoryStream stream = new MemoryStream();
                 await capture.CapturePhoto(stream);
                 stream.Position = 0;
-
-                //using FileStream stream = System.IO.File.OpenRead(@"C:\Users\Keet Fox\OneDrive\Pictures\Cyberpunk 2077\WIN_20210109_10_09_15_Pro.jpg");
+                
+                // For debugging
+                //using FileStream stream = System.IO.File.OpenRead(@"procimages/618f82be-b899-47dd-a7a7-966484772220_original.png");
 
                 // OCR and return
                 using Ocr ocr = new Ocr(stream);
