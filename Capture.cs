@@ -1,4 +1,5 @@
-﻿using SmartLink.Models;
+﻿using Microsoft.Extensions.Logging;
+using SmartLink.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -17,9 +18,13 @@ namespace SmartLink
     {
         public string DeviceId { get; set; }
         private readonly SemaphoreSlim Semaphore = new SemaphoreSlim(1, 1);
+        private readonly ILogger _logger;
+        private readonly ILoggerFactory _logFactory;
 
-        public Capture()
+        public Capture(ILoggerFactory logFactory)
         {
+            _logFactory = logFactory;
+            _logger = _logFactory.CreateLogger<Capture>();
         }
 
         public Capture(string deviceId)
@@ -30,7 +35,9 @@ namespace SmartLink
         public async Task CapturePhoto(Stream stream, uint width = 1920, uint height = 1080)
         {
             // Capture a semaphore so we don't use the card twice
+            _logger.LogInformation($"Waiting on camera semaphore to become available");
             await Semaphore.WaitAsync();
+            _logger.LogInformation($"Captured camera semaphore");
             MediaCaptureInitializationSettings mcis = new MediaCaptureInitializationSettings();
             if (!String.IsNullOrEmpty(DeviceId))
             {
@@ -41,6 +48,7 @@ namespace SmartLink
             MediaCapture mediaCapture = null;
             try
             {
+                _logger.LogInformation($"Initializing media capture for bitmap capturing ({width}x{height})");
                 mediaCapture = new MediaCapture();
                 await mediaCapture.InitializeAsync(mcis);
                 ImageEncodingProperties iep = ImageEncodingProperties.CreateBmp();
@@ -49,7 +57,10 @@ namespace SmartLink
 
                 using (InMemoryRandomAccessStream imras = new InMemoryRandomAccessStream())
                 {
+                    _logger.LogInformation($"Capturing photo to random access stream");
                     await mediaCapture.CapturePhotoToStreamAsync(iep, imras);
+
+                    _logger.LogInformation($"Copying RAS to IO Stream");
                     var imrasNative = imras.AsStream();
                     imrasNative.Position = 0;
                     await imrasNative.CopyToAsync(stream);
@@ -80,8 +91,5 @@ namespace SmartLink
 
             return deviceResults;
         }
-
-
-
     }
 }

@@ -8,6 +8,7 @@ using System.IO;
 using Tesseract;
 using System.Drawing.Imaging;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 
 namespace SmartLink
 {
@@ -28,10 +29,14 @@ namespace SmartLink
         private Bitmap Matrix { get; set; } = null;
         private Bitmap Sequences { get; set; } = null;
         private static TesseractEngine Tesseract { get; set; } = null;
-        private string Id { get; set; } = Guid.NewGuid().ToString("D");
+        private string Id { get; } = Guid.NewGuid().ToString("D");
 
-        private static void Initialize()
+        private readonly ILoggerFactory _logFactory;
+        private readonly ILogger _logger;
+
+        private static void Initialize(ILogger _logger)
         {
+            _logger.LogInformation("Initializing static Tesseract");
             Tesseract = new TesseractEngine(@"./tessdata", "eng", EngineMode.TesseractAndLstm)
             {
                 DefaultPageSegMode = PageSegMode.SingleBlock
@@ -45,11 +50,15 @@ namespace SmartLink
             Tesseract.SetVariable("load_freq_dawg", false); // Don't load word freeuence
         }
 
-        public Ocr(Stream stream)
+        public Ocr(Stream stream, ILoggerFactory loggerFactory)
         {
-            if (Tesseract == null)
-                Initialize();
+            _logFactory = loggerFactory;
+            _logger = _logFactory.CreateLogger<Ocr>();
 
+            if (Tesseract == null)
+                Initialize(_logger);
+
+            _logger.LogInformation($"Saving original stream with id {Id}");
             Image = Image.FromStream(stream);
             Image.Save($"procimages/{Id}_original.png", System.Drawing.Imaging.ImageFormat.Png);
         }
@@ -62,7 +71,10 @@ namespace SmartLink
             GetMatrixImage();
             GetSequenceImage();
 
+            _logger.LogInformation($"Saving matrix image result file for id {Id}");
             Matrix.Save($"procimages/{Id}_matrix.png", System.Drawing.Imaging.ImageFormat.Png);
+
+            _logger.LogInformation($"Saving sequence image result file for id {Id}");
             Sequences.Save($"procimages/{Id}_sequences.png", System.Drawing.Imaging.ImageFormat.Png);
 
             OcrMatrix();
@@ -141,51 +153,80 @@ namespace SmartLink
 
         private void OcrMatrix()
         {
+            _logger.LogInformation("Performing OCR on matrix image");
+
             using Pix pix = BitmapToPix(Matrix);
+
+            _logger.LogInformation("Calling Tesseract on matrix image");
             using var result = Tesseract.Process(pix);
             var text = result.GetText();
 
+            _logger.LogInformation($"Tesseract gave result: {text.Replace("\n", "\\n")}");
+
+            _logger.LogInformation($"Saving resulting tesseract process for matrix id {Id}");
             using (var stream = File.CreateText($"procimages/{Id}_matrix.txt"))
             {
                 stream.Write(text);
             }
 
-            text = Regex.Replace(text, $"[^{ALLOWED_CHARACTERS}]", "_");
+            var rows = text.Split("\n");
 
-            text = text.Replace("\n\n", "\n");
-            text = text.Replace(" ", "\n");
-            var cells = text.Split('\n');
+            // Remove any empty rows (like the last one)
+            rows = rows.ToList().Where(s => !String.IsNullOrWhiteSpace(s)).ToArray();
 
-            int root = (int)Math.Floor(Math.Sqrt(cells.Length));
-            Result.Initialize(root, 0);
+            _logger.LogInformation($"Initializing matrix with size {rows.Length}");
+            Result.Initialize(rows.Length);
 
-            int count = 0;
-            foreach (var cell in cells)
+            for (int rowPos = 0; rowPos < rows.Length; rowPos++)
             {
-                if (String.IsNullOrWhiteSpace(cell))
-                    continue;
-                int row = (int)Math.Floor((double)(count / root));
-                int col = count % root;
-                Result.SetMatrixCell(row, col, FindValue(cell));
-                count++;
+                var row = rows[rowPos];
+                var cols = row.Split(" ");
+
+                if (cols.Length > rows.Length)
+                {
+                    _logger.LogWarning($"Row {rowPos} has too many cells");
+                }
+
+                for (int colPos = 0; colPos < cols.Length; colPos++)
+                {
+                    var cell = cols[colPos];
+                    // Can't create an unsquare matrix
+
+                    if (colPos >= rows.Length)
+                        continue;
+
+                    if (String.IsNullOrWhiteSpace(cell))
+                    {
+                        _logger.LogWarning($"Tesseract OCR failed for cell ({rowPos}, {colPos})");
+                        cell = "__";
+                    }
+
+                    Result.SetMatrixCell(rowPos, colPos, FindValue(cell));
+                }
             }
         }
 
         private void OcrSequences()
         {
+            _logger.LogInformation("Performing OCR on sequence image");
             using Pix pix = BitmapToPix(Sequences);
+
+            _logger.LogInformation("Calling Tesseract on sequence image");
             using var result = Tesseract.Process(pix);
             var text = result.GetText();
 
+            _logger.LogInformation($"Tesseract gave result: {text.Replace("\n", "\\n")}");
+
+            _logger.LogInformation($"Saving resulting tesseract process for sequence id {Id}");
             using (var stream = File.CreateText($"procimages/{Id}_sequence.txt"))
             {
                 stream.Write(text);
             }
 
-            text = Regex.Replace(text, $"[^{ALLOWED_CHARACTERS}]", "_");
-
             var seqs = text.Split("\n").ToList();
             seqs.RemoveAll(x => String.IsNullOrWhiteSpace(x));
+
+            _logger.LogInformation($"Initializing sequences with count {seqs.Count}");
             Result.Initialize(0, seqs.Count);
 
             int seq = 0;
@@ -197,6 +238,7 @@ namespace SmartLink
                 var parts = sequence.Split(" ").ToList();
                 parts.RemoveAll(x => String.IsNullOrWhiteSpace(x));
 
+                _logger.LogInformation($"Initializing sequence {seq} with {parts.Count} cells");
                 Result.Sequences[seq].Initialize(parts.Count);
 
                 foreach(var part in parts)
@@ -213,6 +255,7 @@ namespace SmartLink
 
         private void GetMatrixImage()
         {
+            _logger.LogInformation($"Getting matrix image from full scale");
             var bmp = Image as Bitmap;
             Matrix = bmp.Clone(MATRIX_RECTANGLE, PixelFormat.Format24bppRgb);
             InvertGreyscale(Matrix);
@@ -221,6 +264,7 @@ namespace SmartLink
 
         private void GetSequenceImage()
         {
+            _logger.LogInformation($"Getting sequence image from full scale");
             var bmp = Image as Bitmap;
             Sequences = bmp.Clone(SEQUENCE_RECTANGLE, PixelFormat.Format24bppRgb);
             InvertGreyscale(Sequences);
@@ -264,8 +308,6 @@ namespace SmartLink
 
             bitmap.UnlockBits(bmpData);
         }
-
-
 
         private static unsafe void InvertGreyscale(Bitmap bitmap)
         {

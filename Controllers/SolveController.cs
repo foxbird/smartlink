@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using SmartLink.Models;
+using Microsoft.Extensions.Logging;
 
 namespace SmartLink.Controllers
 {
@@ -12,12 +13,23 @@ namespace SmartLink.Controllers
     [ApiController]
     public class SolveController : ControllerBase
     {
+        private readonly ILogger _logger;
+
+        public SolveController(ILogger<SolveController> logger)
+        {
+            _logger = logger;
+        }
+
         // POST api/<OcrController>
         [HttpPost]
         public ActionResult<List<string>> Post([FromForm] string matrixString, [FromForm] string sequenceString, [FromForm] int bufferSize)
         {
+            _logger.LogInformation($"Performing solve over {matrixString} for {sequenceString} with length {bufferSize}");
             if (string.IsNullOrWhiteSpace(matrixString) || string.IsNullOrWhiteSpace(sequenceString) || bufferSize <= 0)
+            {
+                _logger.LogError("Matrix, sequence, or memory size missing or invalid");
                 return BadRequest(new List<string>() { "Missing matrix, sequence, or memory size" });
+            }
 
             List<string> matrix = matrixString.Split(",").ToList();
             List<string> sequences = sequenceString.Split(",").ToList();
@@ -28,12 +40,14 @@ namespace SmartLink.Controllers
             {
                 if (x.Length % 2 != 0)
                 {
+                    _logger.LogError($"Matrix row '{x}' is not a multiple of 2 characters");
                     errors.Add($"Matrix row '{x}' is not a multiple of 2 characters");
                     return;
                 }
 
                 if (Math.Floor((double)x.Length / 2) != matrix.Count)
                 {
+                    _logger.LogError($"Matrix row '{x}' does permit a square matrix");
                     errors.Add($"Matrix row '{x}' does permit a square matrix");
                     return;
                 }
@@ -48,12 +62,14 @@ namespace SmartLink.Controllers
 
                 if (seq.Length % 2 != 0)
                 {
+                    _logger.LogError($"Sequence '{x}' is not a multiple of two characters");
                     errors.Add($"Sequence '{x}' is not a multiple of two characters");
                     return;
                 }
 
                 if (!String.IsNullOrWhiteSpace(value) && !int.TryParse(value, out int iValue))
                 {
+                    _logger.LogError($"Sequence value for '{x}' is not a valid integer");
                     errors.Add($"Sequence value for '{x}' is not a valid integer");
                     return;
                 }
@@ -63,10 +79,11 @@ namespace SmartLink.Controllers
             if (errors.Count > 0)
                 return BadRequest(errors);
 
-
             // Since we got this far, we know we have a square matrix based on comma splices
             int height = matrix.Count;
             int width = height;
+
+            _logger.LogInformation($"Creating a {width} wide, by {height} tall matrix with buffer size {bufferSize}");
 
             // Createa the solver and send in all the rows
             Solver s = new Solver(height, width) { BufferSize = bufferSize };
@@ -89,10 +106,14 @@ namespace SmartLink.Controllers
             Sequence result = null;
             try
             {
+                _logger.LogInformation("Solving matrix");
                 // Go ahead and solve it 
                 result = s.Solve();
-            } catch (Exception e)
+                _logger.LogInformation("Solution found");
+            }
+            catch (Exception e)
             {
+                _logger.LogError("Exception occurred during the solve", e);
                 return StatusCode(500, new { message = e.Message });
             }
 
@@ -100,6 +121,7 @@ namespace SmartLink.Controllers
             // No results means no solution
             if (result == null || result.SolvedValues.Count == 0)
             {
+                _logger.LogWarning("No solution found");
                 return NotFound(new List<string>() { "No solution found" });
             }
 
