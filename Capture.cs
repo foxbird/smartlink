@@ -17,7 +17,7 @@ namespace SmartLink
     public class Capture
     {
         public string DeviceId { get; set; }
-        private readonly SemaphoreSlim Semaphore = new SemaphoreSlim(1, 1);
+        private static readonly SemaphoreSlim Semaphore = new SemaphoreSlim(1, 1);
         private readonly ILogger _logger;
         private readonly ILoggerFactory _logFactory;
 
@@ -74,6 +74,8 @@ namespace SmartLink
             {
                 if (mediaCapture != null)
                     mediaCapture.Dispose();
+
+                _logger.LogInformation($"Releasing camera semaphore");
                 Semaphore.Release();
             }
         }

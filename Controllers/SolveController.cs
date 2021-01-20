@@ -134,7 +134,32 @@ namespace SmartLink.Controllers
                 $"  Start Chain: {result.Used}",
                 $"  Solution:"
             };
-            result.Cells.ForEach(c => resultStr.Add($"    {c.Value} ({c.Row + 1},{letters[c.Column]})"));
+
+            Cell prev = null;
+            for (int i = 0; i < result.Cells.Count; i++)
+            {
+                Cell c = result.Cells[i];
+                if (i == 0)
+                {
+                    resultStr.Add($"    Start in column {letters[c.Column]} at {c.Value} ({c.Row + 1},{letters[c.Column]})");
+                    prev = c;
+                }
+                else 
+                {
+                    string movement = "";
+                    int horiz = c.Column - prev.Column;
+                    int vert = c.Row - prev.Row;
+                    if (horiz != 0)
+                        movement = $"{Math.Abs(horiz)} {(horiz > 0 ? "right" : "left ")}";
+                    else
+                        movement = $"{Math.Abs(vert)} {(vert > 0 ? "down " : "up   ")}";
+
+                    resultStr.Add($"    {movement} to {c.Value} ({c.Row + 1},{letters[c.Column]})");
+                    prev = c;
+                }
+            }
+            //resultStr.Add("  Old Solution:");
+            //result.Cells.ForEach(c => resultStr.Add($"    {c.Value} ({c.Row + 1},{letters[c.Column]})"));
 
             return Ok(resultStr);
         }

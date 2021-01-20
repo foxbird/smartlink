@@ -1,7 +1,7 @@
 
 // Configuration Variables
-var MATRIX_MAX_COLS = 6;
-var MATRIX_MAX_ROWS = 6;
+var MATRIX_MAX_COLS = 7;
+var MATRIX_MAX_ROWS = 7;
 var SEQUENCE_MAX_COLS = 4;
 var SEQUENCE_MAX_ROWS = 4;
 

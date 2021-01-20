@@ -16,12 +16,12 @@ namespace SmartLink
     {
         private bool disposedValue;
 
-        private static readonly string ALLOWED_CHARACTERS = "abcdefABCDEF1579 \n";
+        private static readonly string ALLOWED_CHARACTERS = "ABCDEF1579 \n";
 
         private static readonly byte MATRIX_THRESHOLD = 210; // 130 calculated
         private static readonly byte SEQUENCE_THRESHOLD = 215;
 
-        private static readonly Rectangle MATRIX_RECTANGLE = new Rectangle(220, 350, 540, 370);
+        private static readonly Rectangle MATRIX_RECTANGLE = new Rectangle(220, 350, 540, 450);
         private static readonly Rectangle SEQUENCE_RECTANGLE = new Rectangle(825, 340, 400, 300);
 
         private Image Image { get; set; } = null;
@@ -241,7 +241,7 @@ namespace SmartLink
                 _logger.LogInformation($"Initializing sequence {seq} with {parts.Count} cells");
                 Result.Sequences[seq].Initialize(parts.Count);
 
-                foreach(var part in parts)
+                foreach (var part in parts)
                 {
                     Result.SetSequenceCell(seq, cell, FindValue(part));
                     cell++;
@@ -260,6 +260,7 @@ namespace SmartLink
             Matrix = bmp.Clone(MATRIX_RECTANGLE, PixelFormat.Format24bppRgb);
             InvertGreyscale(Matrix);
             Threshold(Matrix, MATRIX_THRESHOLD);
+            CropLines(Matrix);
         }
 
         private void GetSequenceImage()
@@ -269,6 +270,7 @@ namespace SmartLink
             Sequences = bmp.Clone(SEQUENCE_RECTANGLE, PixelFormat.Format24bppRgb);
             InvertGreyscale(Sequences);
             Threshold(Sequences, SEQUENCE_THRESHOLD);
+            CropLines(Sequences);
         }
 
         private static Pix BitmapToPix(Bitmap bitmap)
@@ -278,6 +280,67 @@ namespace SmartLink
             bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
             stream.Position = 0;
             return Pix.LoadFromMemory(stream.ToArray());
+        }
+
+        private static unsafe void CropLines(Bitmap bitmap)
+        {
+            BitmapData bmpData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadWrite, bitmap.PixelFormat);
+            byte bpp = 24;
+            byte* scan0 = (byte*)bmpData.Scan0.ToPointer();
+
+            int left = 0;
+            int bottom = bitmap.Height;
+            
+            // Find the left side of the bitmap by scanning the top row looking for a line
+            // We keep scanning to find the right most line
+            for (int col = 0; col < bmpData.Width; col++)
+            {
+                byte* data = scan0 + 0 * bmpData.Stride + col * bpp / 8;
+                byte blue = data[0];
+                byte green = data[1];
+                byte red = data[2];
+
+                if (blue == 0 || green == 0 || red == 0)
+                {
+                    left = col;
+                }
+            }
+
+            // Move left over 1 pixel to account for the line itself
+            left++;
+            left = (left < bmpData.Width ? left : bmpData.Width);
+
+            // Find the bottom line by looking at the right col for a line
+            // and stop scanning at the first value
+            for (int row = 0; row < bmpData.Height; row++)
+            {
+                byte* data = scan0 + row * bmpData.Stride + (bitmap.Width - 1) * bpp / 8;
+                byte blue = data[0];
+                byte green = data[1];
+                byte red = data[2];
+
+                if (blue == 0 || green == 0 || red == 0)
+                {
+                    bottom = row;
+                    break;
+                }
+            }
+
+            // Now, blank out anything left of left, and anything below bottom
+            for (int row = 0; row < bmpData.Height; row++)
+            {
+                for (int col = 0; col < bmpData.Width; col++)
+                {
+                    // If we're a left pixel, or a bottom pixel, erase it
+                    if (col < left || row >= bottom)
+                    {
+                        byte* data = scan0 + row * bmpData.Stride + col * bpp / 8;
+                        data[0] = data[1] = data[2] = 255;
+                    }
+                }
+            }
+
+            bitmap.UnlockBits(bmpData);
         }
 
         private static unsafe void Threshold(Bitmap bitmap, byte threshold)
@@ -349,13 +412,15 @@ namespace SmartLink
                         Matrix.Dispose();
                     if (Sequences != null)
                         Sequences.Dispose();
-                    if (Tesseract != null)
-                        Tesseract.Dispose();
+
+                    // Don't dispose of Tesseract as we want to keep it
+                    //if (Tesseract != null)
+                    //    Tesseract.Dispose();
 
                     Image = null;
                     Matrix = null;
                     Sequences = null;
-                    Tesseract = null;
+                    //Tesseract = null;
                 }
 
                 disposedValue = true;
