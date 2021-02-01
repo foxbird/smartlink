@@ -18,8 +18,9 @@ namespace SmartLink
 
         private static readonly string ALLOWED_CHARACTERS = "ABCDEF1579 \n";
 
-        private static readonly byte MATRIX_THRESHOLD = 210; // 130 calculated
+        private static readonly byte MATRIX_THRESHOLD = 210;
         private static readonly byte SEQUENCE_THRESHOLD = 215;
+        private static readonly byte LINE_PERCENTAGE = 80;
 
         private static readonly Rectangle MATRIX_RECTANGLE = new Rectangle(220, 350, 540, 450);
         private static readonly Rectangle SEQUENCE_RECTANGLE = new Rectangle(825, 340, 400, 300);
@@ -30,6 +31,9 @@ namespace SmartLink
         private Bitmap Sequences { get; set; } = null;
         private static TesseractEngine Tesseract { get; set; } = null;
         private string Id { get; } = Guid.NewGuid().ToString("D");
+
+        public bool SaveImages { get; set; } = true;
+        public bool SaveMatrices { get; set; } = true;
 
         private readonly ILoggerFactory _logFactory;
         private readonly ILogger _logger;
@@ -58,9 +62,13 @@ namespace SmartLink
             if (Tesseract == null)
                 Initialize(_logger);
 
-            _logger.LogInformation($"Saving original stream with id {Id}");
             Image = Image.FromStream(stream);
-            Image.Save($"procimages/{Id}_original.png", System.Drawing.Imaging.ImageFormat.Png);
+
+            if (SaveImages)
+            {
+                _logger.LogInformation($"Saving original stream with id {Id}");
+                Image.Save($"procimages/{Id}_original.png", System.Drawing.Imaging.ImageFormat.Png);
+            }
         }
 
         public CaptureResult Process()
@@ -71,11 +79,14 @@ namespace SmartLink
             GetMatrixImage();
             GetSequenceImage();
 
-            _logger.LogInformation($"Saving matrix image result file for id {Id}");
-            Matrix.Save($"procimages/{Id}_matrix.png", System.Drawing.Imaging.ImageFormat.Png);
+            if (SaveImages)
+            {
+                _logger.LogInformation($"Saving matrix image result file for id {Id}");
+                Matrix.Save($"procimages/{Id}_matrix.png", System.Drawing.Imaging.ImageFormat.Png);
 
-            _logger.LogInformation($"Saving sequence image result file for id {Id}");
-            Sequences.Save($"procimages/{Id}_sequences.png", System.Drawing.Imaging.ImageFormat.Png);
+                _logger.LogInformation($"Saving sequence image result file for id {Id}");
+                Sequences.Save($"procimages/{Id}_sequences.png", System.Drawing.Imaging.ImageFormat.Png);
+            }
 
             OcrMatrix();
             OcrSequences();
@@ -163,10 +174,13 @@ namespace SmartLink
 
             _logger.LogInformation($"Tesseract gave result: {text.Replace("\n", "\\n")}");
 
-            _logger.LogInformation($"Saving resulting tesseract process for matrix id {Id}");
-            using (var stream = File.CreateText($"procimages/{Id}_matrix.txt"))
+            if (SaveMatrices)
             {
-                stream.Write(text);
+                _logger.LogInformation($"Saving resulting tesseract process for matrix id {Id}");
+                using (var stream = File.CreateText($"procimages/{Id}_matrix.txt"))
+                {
+                    stream.Write(text);
+                }
             }
 
             var rows = text.Split("\n");
@@ -217,10 +231,13 @@ namespace SmartLink
 
             _logger.LogInformation($"Tesseract gave result: {text.Replace("\n", "\\n")}");
 
-            _logger.LogInformation($"Saving resulting tesseract process for sequence id {Id}");
-            using (var stream = File.CreateText($"procimages/{Id}_sequence.txt"))
+            if (SaveMatrices)
             {
-                stream.Write(text);
+                _logger.LogInformation($"Saving resulting tesseract process for sequence id {Id}");
+                using (var stream = File.CreateText($"procimages/{Id}_sequence.txt"))
+                {
+                    stream.Write(text);
+                }
             }
 
             var seqs = text.Split("\n").ToList();
@@ -270,6 +287,7 @@ namespace SmartLink
             Sequences = bmp.Clone(SEQUENCE_RECTANGLE, PixelFormat.Format24bppRgb);
             InvertGreyscale(Sequences);
             Threshold(Sequences, SEQUENCE_THRESHOLD);
+            LineThreshold(Sequences, LINE_PERCENTAGE);
             CropLines(Sequences);
         }
 
@@ -280,6 +298,52 @@ namespace SmartLink
             bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
             stream.Position = 0;
             return Pix.LoadFromMemory(stream.ToArray());
+        }
+
+        private static unsafe void LineThreshold(Bitmap bitmap, int threshold)
+        {
+            BitmapData bmpData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadWrite, bitmap.PixelFormat);
+            byte bpp = 24;
+            byte* scan0 = (byte*)bmpData.Scan0.ToPointer();
+
+            // Apply the threshold to all the bits
+            for (int row = 0; row < bmpData.Height; row++)
+            {
+                int totalPixels = 0;
+                for (int col = 0; col < bmpData.Width; col++)
+                {
+                    byte* data = scan0 + row * bmpData.Stride + col * bpp / 8;
+                    byte blue = data[0];
+                    byte green = data[1];
+                    byte red = data[2];
+
+                    if (red == 0 && green == 0 && blue == 0)
+                    {
+                        totalPixels++;
+                    }
+                }
+
+                // If the sum of pixel totals is greater, blank out the line
+                if ((float)totalPixels / (float)bmpData.Width * 100 > threshold)
+                {
+                    for (int col = 0; col < bmpData.Width; col++)
+                    {
+                        byte* data = scan0 + row * bmpData.Stride + col * bpp / 8;
+                        byte blue = data[0];
+                        byte green = data[1];
+                        byte red = data[2];
+
+                        byte pixel = (byte)255;
+                        blue = green = red = pixel;
+
+                        data[0] = blue;
+                        data[1] = green;
+                        data[2] = red;
+                    }
+                }
+            }
+
+            bitmap.UnlockBits(bmpData);
         }
 
         private static unsafe void CropLines(Bitmap bitmap)
