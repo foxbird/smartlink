@@ -20,7 +20,7 @@ namespace SmartLink
 
         private static readonly byte MATRIX_THRESHOLD = 210;
         private static readonly byte SEQUENCE_THRESHOLD = 215;
-        private static readonly byte LINE_PERCENTAGE = 80;
+        private static readonly byte LINE_PERCENTAGE = 50;
 
         private static readonly Rectangle MATRIX_RECTANGLE = new Rectangle(220, 350, 540, 450);
         private static readonly Rectangle SEQUENCE_RECTANGLE = new Rectangle(825, 340, 400, 300);
@@ -287,8 +287,8 @@ namespace SmartLink
             Sequences = bmp.Clone(SEQUENCE_RECTANGLE, PixelFormat.Format24bppRgb);
             InvertGreyscale(Sequences);
             Threshold(Sequences, SEQUENCE_THRESHOLD);
-            LineThreshold(Sequences, LINE_PERCENTAGE);
             CropLines(Sequences);
+            LineThreshold(Sequences, LINE_PERCENTAGE);
         }
 
         private static Pix BitmapToPix(Bitmap bitmap)
@@ -376,7 +376,7 @@ namespace SmartLink
 
             // Find the bottom line by looking at the right col for a line
             // and stop scanning at the first value
-            for (int row = 0; row < bmpData.Height; row++)
+            for (int row = bmpData.Height - 1; row >= 0; row--)
             {
                 byte* data = scan0 + row * bmpData.Stride + (bitmap.Width - 1) * bpp / 8;
                 byte blue = data[0];
@@ -389,6 +389,9 @@ namespace SmartLink
                     break;
                 }
             }
+
+            bottom--;
+            bottom = (bottom >= 0 ? bottom : 0);
 
             // Now, blank out anything left of left, and anything below bottom
             for (int row = 0; row < bmpData.Height; row++)
